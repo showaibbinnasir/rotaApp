@@ -108,15 +108,25 @@
       gap: 12px;
     }
 
+    /* ── Accordion: animated day body ── */
     .day-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      max-height: 2000px;
       overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      transition:
+        max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.28s ease,
+        padding-top 0.32s ease;
+    }
+
+    .day-card.expanded .day-list {
+      max-height: 2000px;
       opacity: 1;
-      transform: translateY(0);
-      transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.25s ease;
+      padding-top: 12px;
     }
 
     .staff-item {
@@ -205,39 +215,36 @@
     }
 
     .day-card {
-      min-height: 340px;
       transition: all 0.25s ease;
     }
 
-    .day-card.collapsed {
-      min-height: auto;
+    /* ── Day header: clickable with chevron ── */
+    .day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 0;
     }
 
-    .day-card.collapsed .day-list {
-      max-height: 0;
-      opacity: 0;
-      transform: translateY(-6px);
-      pointer-events: none;
-      margin-top: 0;
-    }
-
-    .toggle-btn {
-      background: #f4f4f5;
-      border-radius: 10px;
-      padding: 8px 12px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #111;
-    }
-
-    .toggle-btn:hover {
-      background: #e4e4e7;
-    }
-
-    .title-actions {
+    .day-header-left {
       display: flex;
       align-items: center;
       gap: 10px;
+    }
+
+    /* Chevron rotates 180deg when day is expanded */
+    .chevron {
+      display: flex;
+      align-items: center;
+      color: #aaa;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-shrink: 0;
+    }
+
+    .day-card.expanded .chevron {
+      transform: rotate(180deg);
     }
 
     .empty {
@@ -288,15 +295,14 @@
         <div class="card-title">
           <h2>Weekly Hours Summary</h2>
         </div>
-
         <div id="hoursSummary" class="staff-list"></div>
       </div>
+
       <div class="card">
         <div class="card-title">
           <h2>Staff</h2>
           <div class="badge" id="staffCount">0</div>
         </div>
-
         <div class="staff-list" id="staffList"></div>
       </div>
 
@@ -307,81 +313,61 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <script>
-    const days = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday'
-    ];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
     let staff = JSON.parse(localStorage.getItem('staff')) || [];
 
     let rota = JSON.parse(localStorage.getItem('rota')) || {
-      Monday: [],
-      Tuesday: [],
-      Wednesday: [],
-      Thursday: [],
-      Friday: [],
-      Saturday: [],
-      Sunday: []
+      Monday: [], Tuesday: [], Wednesday: [], Thursday: [],
+      Friday: [], Saturday: [], Sunday: []
     };
 
-    let draggedStaff = null;
+    // Accordion: only one day open at a time
+    let expandedDay = localStorage.getItem('expandedDay') || null;
 
-    let collapsedDays = JSON.parse(localStorage.getItem('collapsedDays')) || {};
+    let draggedStaff = null;
 
     function saveData() {
       localStorage.setItem('staff', JSON.stringify(staff));
       localStorage.setItem('rota', JSON.stringify(rota));
-      localStorage.setItem('collapsedDays', JSON.stringify(collapsedDays));
+      localStorage.setItem('expandedDay', expandedDay || '');
     }
 
     function addStaff() {
       const input = document.getElementById('staffInput');
       const name = input.value.trim();
-
       if (!name) return;
-
-      staff.push({
-        id: Date.now(),
-        name
-      });
-
+      staff.push({ id: Date.now(), name });
       input.value = '';
-
       saveData();
       render();
     }
 
     function deleteStaff(id) {
-      staff = staff.filter(person => person.id !== id);
-
-      days.forEach(day => {
-        rota[day] = rota[day].filter(person => person.id !== id);
-      });
-
+      staff = staff.filter(p => p.id !== id);
+      days.forEach(day => { rota[day] = rota[day].filter(p => p.id !== id); });
       saveData();
       render();
     }
 
     function removeFromDay(day, id) {
-      rota[day] = rota[day].filter(person => person.id !== id);
-
+      rota[day] = rota[day].filter(p => p.id !== id);
       saveData();
       render();
     }
 
     function updateShift(day, id, type, value) {
-      const person = rota[day].find(person => person.id === id);
-
-      if (person) {
-        person[type] = value;
-      }
-
+      const person = rota[day].find(p => p.id === id);
+      if (person) person[type] = value;
       saveData();
+      renderHoursSummary();
+    }
+
+    // Toggle accordion — opening a day closes the previous one
+    function toggleDay(day) {
+      expandedDay = expandedDay === day ? null : day;
+      saveData();
+      renderRota();
     }
 
     async function downloadPDF() {
@@ -455,8 +441,20 @@
       days.forEach((day, i) => {
         const x = startX + colWidth * (i + 1);
 
+        const label = `${day} ${formattedDates[i]}`;
+
+        // background
+        doc.setFillColor(20, 20, 20);
         doc.rect(x, startY, colWidth, rowHeight, 'F');
-        doc.text(`${day} ${formattedDates[i]}`, x + 2, startY + 9);
+
+        // IMPORTANT: set text color BEFORE writing text
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+
+        const textWidth = doc.getTextWidth(label);
+        const centerX = x + (colWidth / 2) - (textWidth / 2);
+
+        doc.text(label, centerX, startY + 9);
       });
 
       doc.setTextColor(0, 0, 0);
@@ -505,41 +503,18 @@
 
     function renderStaff() {
       const staffList = document.getElementById('staffList');
-      const staffCount = document.getElementById('staffCount');
-
-      staffCount.innerText = staff.length;
-
-      if (staff.length === 0) {
-        staffList.innerHTML = '<div class="empty">No staff added yet</div>';
-        return;
-      }
-
+      document.getElementById('staffCount').innerText = staff.length;
+      if (!staff.length) { staffList.innerHTML = '<div class="empty">No staff added yet</div>'; return; }
       staffList.innerHTML = '';
-
       staff.forEach(person => {
         const item = document.createElement('div');
         item.className = 'staff-item';
         item.draggable = true;
-
-        item.addEventListener('dragstart', () => {
-          draggedStaff = person;
-        });
-
-        item.innerHTML = `
-          <span class="staff-name">${person.name}</span>
-          <button class="delete-btn">✕</button>
-        `;
-
+        item.addEventListener('dragstart', () => { draggedStaff = person; });
+        item.innerHTML = `<span class="staff-name">${person.name}</span><button class="delete-btn">✕</button>`;
         item.querySelector('button').onclick = () => deleteStaff(person.id);
-
         staffList.appendChild(item);
       });
-    }
-
-    function toggleDay(day) {
-      collapsedDays[day] = !collapsedDays[day];
-      saveData();
-      render();
     }
 
     function renderRota() {
@@ -547,82 +522,55 @@
       rotaGrid.innerHTML = '';
 
       days.forEach(day => {
+        const isExpanded = expandedDay === day;
         const dayCard = document.createElement('div');
-        dayCard.className = `card day-card ${collapsedDays[day] ? 'collapsed' : ''}`;
+        dayCard.className = `card day-card${isExpanded ? ' expanded' : ''}`;
 
-        dayCard.addEventListener('dragover', e => {
-          e.preventDefault();
-        });
-
+        dayCard.addEventListener('dragover', e => e.preventDefault());
         dayCard.addEventListener('drop', () => {
           if (!draggedStaff) return;
-
-          const exists = rota[day].find(person => person.id === draggedStaff.id);
-
-          if (!exists) {
-            rota[day].push({
-              id: draggedStaff.id,
-              name: draggedStaff.name,
-              start: '',
-              end: ''
-            });
-            saveData();
-            render();
-          }
+          if (rota[day].find(p => p.id === draggedStaff.id)) return;
+          rota[day].push({ id: draggedStaff.id, name: draggedStaff.name, start: '', end: '' });
+          // Auto-expand the day a staff member is dropped onto
+          expandedDay = day;
+          saveData();
+          render();
         });
 
-        const assigned = rota[day]
-          .map(person => `
-            <div class="assigned-item">
-              <div class="assigned-top">
-                <span>${person.name}</span>
-
-                <button class="remove-btn" onclick="removeFromDay('${day}', ${person.id})">
-                  Remove
-                </button>
-              </div>
-
-              <div class="shift-row">
-                <div>
-                  <div style="font-size:12px;margin-bottom:6px;opacity:0.7;">Start Time</div>
-                  <input
-                    class="shift-input"
-                    type="time"
-                    value="${person.start || ''}"
-                    onchange="updateShift('${day}', ${person.id}, 'start', this.value)"
-                  />
-                </div>
-
-                <div>
-                  <div style="font-size:12px;margin-bottom:6px;opacity:0.7;">End Time</div>
-                  <input
-                    class="shift-input"
-                    type="time"
-                    value="${person.end || ''}"
-                    onchange="updateShift('${day}', ${person.id}, 'end', this.value)"
-                  />
-                </div>
-              </div>
+        const assigned = rota[day].map(person => `
+          <div class="assigned-item">
+            <div class="assigned-top">
+              <span>${person.name}</span>
+              <button class="remove-btn" onclick="removeFromDay('${day}', ${person.id})">Remove</button>
             </div>
-          `)
-          .join('');
-
-        dayCard.innerHTML = `
-          <div class="card-title">
-            <h3>${day}</h3>
-
-            <div class="title-actions">
-              <div class="badge">${rota[day].length}</div>
-
-              <button
-                class="toggle-btn"
-                onclick="toggleDay('${day}')"
-              >
-                ${collapsedDays[day] ? 'Expand' : 'Minimize'}
-              </button>
+            <div class="shift-row">
+              <div>
+                <div style="font-size:12px;margin-bottom:6px;opacity:0.7;">Start Time</div>
+                <input class="shift-input" type="time" value="${person.start || ''}"
+                  onchange="updateShift('${day}', ${person.id}, 'start', this.value)" />
+              </div>
+              <div>
+                <div style="font-size:12px;margin-bottom:6px;opacity:0.7;">End Time</div>
+                <input class="shift-input" type="time" value="${person.end || ''}"
+                  onchange="updateShift('${day}', ${person.id}, 'end', this.value)" />
+              </div>
             </div>
           </div>
+        `).join('');
 
+        const chevronSVG = `<svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>`;
+
+        dayCard.innerHTML = `
+          <div class="card-title day-header" onclick="toggleDay('${day}')">
+            <div class="day-header-left">
+              ${chevronSVG}
+              <h3>${day}</h3>
+            </div>
+            <div class="badge">${rota[day].length}</div>
+          </div>
           <div class="day-list">
             ${assigned || '<div class="empty">Drag staff here</div>'}
           </div>
@@ -634,80 +582,44 @@
 
     function calculateWeeklyHours() {
       const totals = {};
-
       days.forEach(day => {
-        rota[day].forEach(person => {
-          if (!person.start || !person.end) return;
-
-          const start = new Date(`1970-01-01T${person.start}:00`);
-          const end = new Date(`1970-01-01T${person.end}:00`);
-
-          let diff = (end - start) / (1000 * 60 * 60);
-
-          if (diff < 0) {
-            diff += 24;
-          }
-
-          if (!totals[person.name]) {
-            totals[person.name] = 0;
-          }
-
-          totals[person.name] += diff;
+        rota[day].forEach(p => {
+          if (!p.start || !p.end) return;
+          const s = new Date(`1970-01-01T${p.start}:00`);
+          const e = new Date(`1970-01-01T${p.end}:00`);
+          let diff = (e - s) / 3600000;
+          if (diff < 0) diff += 24;
+          totals[p.name] = (totals[p.name] || 0) + diff;
         });
       });
-
-      return Object.entries(totals).map(([name, hours]) => ({
-        name,
-        hours
-      }));
+      return Object.entries(totals).map(([name, hours]) => ({ name, hours }));
     }
 
     function renderHoursSummary() {
       const container = document.getElementById('hoursSummary');
-
       const totals = calculateWeeklyHours();
-
-      if (totals.length === 0) {
-        container.innerHTML = '<div class="empty">No weekly hours calculated yet</div>';
-        return;
-      }
-
-      container.innerHTML = totals
-        .map(person => `
-          <div class="staff-item">
-            <span class="staff-name">${person.name}</span>
-            <span>${person.hours.toFixed(2)} hrs</span>
-          </div>
-        `)
-        .join('');
+      if (!totals.length) { container.innerHTML = '<div class="empty">No weekly hours calculated yet</div>'; return; }
+      container.innerHTML = totals.map(p => `
+        <div class="staff-item">
+          <span class="staff-name">${p.name}</span>
+          <span>${p.hours.toFixed(2)} hrs</span>
+        </div>
+      `).join('');
     }
 
     function clearAllData() {
       if (!confirm('Are you sure you want to delete all rota data?')) return;
-
       staff = [];
-      rota = {
-        Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: []
-      };
-      collapsedDays = {};
-
-      localStorage.removeItem('staff');
-      localStorage.removeItem('rota');
-      localStorage.removeItem('collapsedDays');
-
+      rota = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
+      expandedDay = null;
+      ['staff', 'rota', 'expandedDay'].forEach(k => localStorage.removeItem(k));
       render();
     }
 
-    function render() {
-      renderStaff();
-      renderRota();
-      renderHoursSummary();
-    }
+    function render() { renderStaff(); renderRota(); renderHoursSummary(); }
 
     document.getElementById('staffInput').addEventListener('keypress', e => {
-      if (e.key === 'Enter') {
-        addStaff();
-      }
+      if (e.key === 'Enter') addStaff();
     });
 
     render();
