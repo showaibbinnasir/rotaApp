@@ -101,11 +101,21 @@
       color: #666;
     }
 
-    .staff-list,
+    .staff-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
     .day-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
+      max-height: 2000px;
+      overflow: hidden;
+      opacity: 1;
+      transform: translateY(0);
+      transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.25s ease;
     }
 
     .staff-item {
@@ -203,7 +213,11 @@
     }
 
     .day-card.collapsed .day-list {
-      display: none;
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-6px);
+      pointer-events: none;
+      margin-top: 0;
     }
 
     .toggle-btn {
