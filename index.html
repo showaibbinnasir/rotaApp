@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -33,7 +34,7 @@
       align-items: center;
       gap: 20px;
       margin-bottom: 24px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
       flex-wrap: wrap;
     }
 
@@ -83,7 +84,7 @@
       background: white;
       border-radius: 24px;
       padding: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     }
 
     .card-title {
@@ -128,12 +129,12 @@
       align-items: center;
       cursor: grab;
       transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
     }
 
     .staff-item:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
     }
 
     .assigned-item {
@@ -145,7 +146,7 @@
       flex-direction: column;
       align-items: flex-start;
       gap: 14px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
     }
 
     .delete-btn,
@@ -176,7 +177,7 @@
 
     .shift-input:focus {
       border-color: #6366f1;
-      box-shadow: 0 0 0 4px rgba(99,102,241,0.15);
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
     }
 
     .assigned-top {
@@ -264,6 +265,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <div class="topbar">
@@ -405,74 +407,85 @@
         });
       });
 
+      // Build staff list (rows)
+      const staffNames = [...new Set(staff.map(s => s.name))];
+
+      const table = staffNames.map(name => {
+        const row = { name };
+
+        days.forEach(day => {
+          const entry = rota[day].find(p => p.name === name);
+
+          if (entry && entry.start && entry.end) {
+            row[day] = `${entry.start} - ${entry.end}`;
+          } else {
+            row[day] = '';
+          }
+        });
+
+        return row;
+      });
+
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
 
       const startX = 10;
-      const headerY = 35;
-      const colWidth = (pageWidth - 20) / 7;
-      const headerHeight = 14;
-      const rowHeight = 22;
+      const startY = 40;
 
-      function drawHeader(yPos) {
-        doc.setFillColor(20, 20, 20);
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9);
+      const colWidth = (pageWidth - 20) / (days.length + 1);
+      const rowHeight = 14;
 
-        days.forEach((day, index) => {
-          const x = startX + index * colWidth;
-
-          doc.rect(x, yPos, colWidth, headerHeight, 'F');
-          doc.text(day, x + 2, yPos + 6);
-          doc.text(formattedDates[index], x + 2, yPos + 12);
-        });
-
-        doc.setTextColor(0, 0, 0);
-      }
-
+      // Title
       doc.setFontSize(18);
       doc.text('Weekly Staff Rota', 14, 15);
 
       doc.setFontSize(11);
-      doc.text(`Week: ${formattedDates[0]} - ${formattedDates[6]}`, 14, 23);
+      doc.text(`Week: ${formattedDates[0]} - ${formattedDates[6]}`, 14, 25);
 
-      let maxRows = 0;
-      days.forEach(day => {
-        maxRows = Math.max(maxRows, rota[day].length);
+      // Header row styling
+      doc.setFontSize(9);
+      doc.setFillColor(20, 20, 20);
+      doc.setTextColor(255, 255, 255);
+
+      // Staff header
+      doc.rect(startX, startY, colWidth, rowHeight, 'F');
+      doc.text('Staff', startX + 2, startY + 9);
+
+      // Day headers
+      days.forEach((day, i) => {
+        const x = startX + colWidth * (i + 1);
+
+        doc.rect(x, startY, colWidth, rowHeight, 'F');
+        doc.text(`${day} ${formattedDates[i]}`, x + 2, startY + 9);
       });
 
-      let y = headerY;
-      drawHeader(y);
-      y += headerHeight;
+      doc.setTextColor(0, 0, 0);
 
-      for (let row = 0; row < maxRows; row++) {
-        if (y + rowHeight > pageHeight - 20) {
+      // Rows
+      let y = startY + rowHeight;
+
+      table.forEach(row => {
+        if (y > pageHeight - 20) {
           doc.addPage();
           y = 20;
-          drawHeader(y);
-          y += headerHeight;
         }
 
-        days.forEach((day, col) => {
-          const x = startX + col * colWidth;
+        // Staff name column
+        doc.rect(startX, y, colWidth, rowHeight);
+        doc.text(row.name, startX + 2, y + 9);
+
+        // Day columns
+        days.forEach((day, i) => {
+          const x = startX + colWidth * (i + 1);
 
           doc.rect(x, y, colWidth, rowHeight);
-
-          const person = rota[day][row];
-
-          if (person) {
-            doc.setFontSize(9);
-            doc.text(person.name, x + 2, y + 8);
-
-            const shift = `${person.start || '--:--'} - ${person.end || '--:--'}`;
-            doc.setFontSize(8);
-            doc.text(shift, x + 2, y + 16);
-          }
+          doc.text(row[day] || '', x + 2, y + 9);
         });
 
         y += rowHeight;
-      }
+      });
 
+      // Summary page
       doc.addPage();
       doc.setFontSize(18);
       doc.text('Weekly Hours Summary', 14, 20);
@@ -486,7 +499,7 @@
         sy += 10;
       });
 
-      const fileName = startInput ? `rota-${startInput}.pdf` : 'weekly-rota.pdf';
+      const fileName = `rota-${startInput}.pdf`;
       doc.save(fileName);
     }
 
@@ -700,4 +713,5 @@
     render();
   </script>
 </body>
+
 </html>
