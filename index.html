@@ -292,12 +292,17 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
   background:var(--surface);
   border-top:1px solid var(--border);
   border-radius:20px 20px 0 0;
-  box-shadow:0 -4px 24px rgba(0,0,0,.12);
+  box-shadow:0 -6px 28px rgba(0,0,0,.13);
   transition:transform .32s cubic-bezier(.4,0,.2,1);
-  transform:translateY(calc(100% - 76px));
+  /* collapsed: only handle + pill strip visible (~72px) */
+  transform:translateY(calc(100% - 72px));
+  /* cap the max open height so it never swallows the screen */
+  max-height:35vh;
 }
 #staff-float.open{transform:translateY(0);}
 @media(max-width:760px){#staff-float{display:block;}}
+
+/* drag handle pill at top */
 .float-handle{
   position:relative;
   display:flex;
@@ -305,6 +310,7 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
   justify-content:space-between;
   padding:14px 16px 8px;
   cursor:pointer;
+  flex-shrink:0;
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
 }
@@ -319,16 +325,23 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
 .float-handle-title{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;padding-top:4px;}
 .float-chevron{color:var(--muted);font-size:16px;transition:transform .3s;padding-top:4px;}
 #staff-float.open .float-chevron{transform:rotate(180deg);}
+
+/* collapsed: horizontal scrollable pill row */
 .float-strip{
   display:flex;
   gap:8px;
   padding:0 14px 14px;
   overflow-x:auto;
   -webkit-overflow-scrolling:touch;
-  scrollbar-width:none;
+  /* thin visible scrollbar so user knows it scrolls */
+  scrollbar-width:thin;
+  scrollbar-color:var(--border) transparent;
 }
-.float-strip::-webkit-scrollbar{display:none;}
+.float-strip::-webkit-scrollbar{height:3px;}
+.float-strip::-webkit-scrollbar-track{background:transparent;}
+.float-strip::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 #staff-float.open .float-strip{display:none;}
+
 .float-pill{
   flex-shrink:0;
   background:var(--accent);
@@ -345,14 +358,38 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
   -webkit-tap-highlight-color:transparent;
 }
 .float-pill.dragging{opacity:.35;}
+
+/* open: fixed-height scrollable list */
 .float-body{
   display:none;
-  padding:4px 14px 24px;
-  max-height:40vh;
-  overflow-y:auto;
+  /* fixed height — never grows beyond this, scrolls instead */
+  height:calc(35vh - 72px);
+  overflow-y:scroll;
   -webkit-overflow-scrolling:touch;
+  padding:4px 14px 20px;
+  /* styled scrollbar */
+  scrollbar-width:thin;
+  scrollbar-color:var(--border) transparent;
 }
+.float-body::-webkit-scrollbar{width:4px;}
+.float-body::-webkit-scrollbar-track{background:transparent;}
+.float-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 #staff-float.open .float-body{display:block;}
+
+/* subtle top fade to hint scroll */
+.float-body-wrap{
+  position:relative;
+}
+.float-body-wrap::after{
+  content:'';
+  position:sticky;
+  bottom:0;
+  display:block;
+  height:28px;
+  background:linear-gradient(to top,var(--surface),transparent);
+  pointer-events:none;
+  margin-top:-28px;
+}
 </style>
 </head>
 <body>
@@ -410,8 +447,10 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
     <span class="float-chevron">▾</span>
   </div>
   <div class="float-strip" id="floatStrip"></div>
-  <div class="float-body">
-    <div class="staff-list" id="floatStaffList"></div>
+  <div class="float-body-wrap">
+    <div class="float-body">
+      <div class="staff-list" id="floatStaffList"></div>
+    </div>
   </div>
 </div>
 
