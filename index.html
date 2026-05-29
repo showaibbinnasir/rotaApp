@@ -272,13 +272,87 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
   white-space:nowrap;
 }
 
+@media(max-width:760px){
+  .staff-sidebar{display:none;}
+}
 @media(max-width:480px){
-  body{padding:14px 12px 50px;}
+  body{padding:14px 12px 200px;}
   .topbar{padding:16px;}
   .topbar-title h1{font-size:22px;}
   .rota-grid{grid-template-columns:1fr;}
   .hours-grid{grid-template-columns:repeat(2,1fr);}
 }
+
+/* ── MOBILE FLOATING STAFF DRAWER ── */
+#staff-float{
+  display:none;
+  position:fixed;
+  bottom:0;left:0;right:0;
+  z-index:1000;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  border-radius:20px 20px 0 0;
+  box-shadow:0 -4px 24px rgba(0,0,0,.12);
+  transition:transform .32s cubic-bezier(.4,0,.2,1);
+  transform:translateY(calc(100% - 76px));
+}
+#staff-float.open{transform:translateY(0);}
+@media(max-width:760px){#staff-float{display:block;}}
+.float-handle{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 16px 8px;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+.float-handle-bar{
+  width:36px;height:4px;
+  background:var(--border);
+  border-radius:2px;
+  position:absolute;
+  left:50%;transform:translateX(-50%);
+  top:8px;
+}
+.float-handle-title{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;padding-top:4px;}
+.float-chevron{color:var(--muted);font-size:16px;transition:transform .3s;padding-top:4px;}
+#staff-float.open .float-chevron{transform:rotate(180deg);}
+.float-strip{
+  display:flex;
+  gap:8px;
+  padding:0 14px 14px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.float-strip::-webkit-scrollbar{display:none;}
+#staff-float.open .float-strip{display:none;}
+.float-pill{
+  flex-shrink:0;
+  background:var(--accent);
+  color:#fff;
+  padding:9px 15px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:500;
+  cursor:grab;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;
+  white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
+}
+.float-pill.dragging{opacity:.35;}
+.float-body{
+  display:none;
+  padding:4px 14px 24px;
+  max-height:40vh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#staff-float.open .float-body{display:block;}
 </style>
 </head>
 <body>
@@ -315,7 +389,7 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
   <!-- MAIN LAYOUT -->
   <div class="layout">
     <!-- STAFF SIDEBAR -->
-    <div class="card" style="align-self:start;">
+    <div class="card staff-sidebar" style="align-self:start;">
       <div class="card-title">
         <h2>Staff</h2>
         <span class="badge" id="staffCount">0</span>
@@ -325,6 +399,19 @@ input[type=time]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.7;
 
     <!-- ROTA GRID -->
     <div class="rota-grid" id="rotaGrid"></div>
+  </div>
+</div>
+
+<!-- MOBILE FLOATING STAFF DRAWER -->
+<div id="staff-float">
+  <div class="float-handle" onclick="toggleFloat()">
+    <div class="float-handle-bar"></div>
+    <span class="float-handle-title">👥 Staff <span class="badge" id="floatStaffCount">0</span></span>
+    <span class="float-chevron">▾</span>
+  </div>
+  <div class="float-strip" id="floatStrip"></div>
+  <div class="float-body">
+    <div class="staff-list" id="floatStaffList"></div>
   </div>
 </div>
 
@@ -356,6 +443,10 @@ function addStaff(){
   el.value='';
   save();render();
 }
+function toggleFloat(){
+  document.getElementById('staff-float').classList.toggle('open');
+}
+
 function deleteStaff(id){
   staff=staff.filter(p=>p.id!==id);
   DAYS.forEach(d=>{rota[d]=rota[d].filter(p=>p.id!==id);});
@@ -483,26 +574,42 @@ function endDrag(){
 }
 
 /* ─── RENDER staff ─── */
+function makeStaffItem(person){
+  const el=document.createElement('div');
+  el.className='staff-item';
+  el.innerHTML=`<span class="staff-name">${esc(person.name)}</span><button class="del-btn" aria-label="Remove ${esc(person.name)}">✕</button>`;
+  el.querySelector('button').onclick=(e)=>{e.stopPropagation();deleteStaff(person.id);};
+  el.addEventListener('mousedown',e=>startMouseDrag(e,person,el));
+  el.addEventListener('touchstart',e=>startTouchDrag(e,person,el),{passive:true});
+  return el;
+}
+function makePill(person){
+  const el=document.createElement('div');
+  el.className='float-pill';
+  el.textContent=person.name;
+  el.addEventListener('mousedown',e=>startMouseDrag(e,person,el));
+  el.addEventListener('touchstart',e=>startTouchDrag(e,person,el),{passive:true});
+  return el;
+}
 function renderStaff(){
   const list=document.getElementById('staffList');
-  document.getElementById('staffCount').textContent=staff.length;
-  if(!staff.length){list.innerHTML='<div class="empty">No staff yet — add someone above</div>';return;}
-  list.innerHTML='';
+  const strip=document.getElementById('floatStrip');
+  const floatList=document.getElementById('floatStaffList');
+  const count=staff.length;
+  document.getElementById('staffCount').textContent=count;
+  document.getElementById('floatStaffCount').textContent=count;
+  const empty='<div class="empty">No staff yet — add someone above</div>';
+  if(!count){
+    list.innerHTML=empty;
+    strip.innerHTML='';
+    floatList.innerHTML=empty;
+    return;
+  }
+  list.innerHTML='';strip.innerHTML='';floatList.innerHTML='';
   staff.forEach(person=>{
-    const el=document.createElement('div');
-    el.className='staff-item';
-    el.innerHTML=`<span class="staff-name">${esc(person.name)}</span><button class="del-btn" aria-label="Remove ${esc(person.name)}">✕</button>`;
-    el.querySelector('button').onclick=(e)=>{e.stopPropagation();deleteStaff(person.id);};
-
-    // mouse drag
-    el.addEventListener('mousedown',e=>startMouseDrag(e,person,el));
-
-    // touch drag
-    el.addEventListener('touchstart',e=>{
-      startTouchDrag(e,person,el);
-    },{passive:true});
-
-    list.appendChild(el);
+    list.appendChild(makeStaffItem(person));
+    strip.appendChild(makePill(person));
+    floatList.appendChild(makeStaffItem(person));
   });
 }
 
