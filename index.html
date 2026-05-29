@@ -577,8 +577,9 @@ async function downloadPDF(){
   if(!startInput){alert('Please select a week start date first.');return;}
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF('landscape');
-  const startDate=new Date(startInput);
-  const dates=DAYS.map((_,i)=>{const d=new Date(startDate);d.setDate(startDate.getDate()+i);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});});
+  const [sy_,sm_,sd_]=startInput.split('-').map(Number);
+  const startDate=new Date(sy_,sm_-1,sd_); // local midnight — avoids UTC offset shifting the day
+  const dates=DAYS.map((_,i)=>{const d=new Date(sy_,sm_-1,sd_+i);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});});
   const staffNames=[...new Set(staff.map(s=>s.name))];
   const table=staffNames.map(name=>{
     const row={name};
@@ -594,7 +595,7 @@ async function downloadPDF(){
   doc.setFillColor(25,25,23);doc.setTextColor(255,255,255);doc.setFontSize(8);
   doc.rect(sx,sy,cw,rh,'F');doc.text('Staff',sx+3,sy+8.5);
   DAYS.forEach((day,i)=>{
-    const x=sx+cw*(i+1);const label=`${day} ${dates[i]}`;
+    const x=sx+cw*(i+1);const label=day;
     doc.setFillColor(25,25,23);doc.rect(x,sy,cw,rh,'F');
     doc.setTextColor(255,255,255);
     const tw=doc.getTextWidth(label);
